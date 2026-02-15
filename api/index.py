@@ -10,9 +10,12 @@ CORS(app)
 
 # Database connection helper
 def get_db_connection():
-    url = os.environ.get('POSTGRES_URL') or os.environ.get('DATABASE_URL')
+    # Check all common Vercel/Prisma environment variable names
+    url = (os.environ.get('POSTGRES_URL') or 
+           os.environ.get('DATABASE_URL') or 
+           os.environ.get('STORAGE_URL'))
     if not url:
-        raise Exception("Missing database connection URL (POSTGRES_URL or DATABASE_URL)")
+        raise Exception("Missing database connection URL (POSTGRES_URL, DATABASE_URL, or STORAGE_URL)")
     
     # Psycopg2 requires postgresql:// instead of postgres://
     if url.startswith('postgres://'):
