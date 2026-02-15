@@ -81,11 +81,13 @@ with app.app_context():
     except Exception as e:
         print(f"Database initialization deferred: {e}")
 
+@app.route('/health', methods=['GET'])
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
 
 # ===== CLIENTS =====
+@app.route('/clients', methods=['GET', 'POST'])
 @app.route('/api/clients', methods=['GET', 'POST'])
 def handle_clients():
     conn = get_db_connection()
@@ -110,6 +112,7 @@ def handle_clients():
         conn.close()
         return jsonify(new_client), 201
 
+@app.route('/clients/<id>', methods=['PUT', 'DELETE'])
 @app.route('/api/clients/<id>', methods=['PUT', 'DELETE'])
 def handle_client(id):
     conn = get_db_connection()
@@ -135,6 +138,7 @@ def handle_client(id):
         return '', 204
 
 # ===== PROJECTS =====
+@app.route('/projects', methods=['GET', 'POST'])
 @app.route('/api/projects', methods=['GET', 'POST'])
 def handle_projects():
     conn = get_db_connection()
@@ -159,6 +163,7 @@ def handle_projects():
         conn.close()
         return jsonify(new_project), 201
 
+@app.route('/projects/<id>', methods=['PUT', 'DELETE'])
 @app.route('/api/projects/<id>', methods=['PUT', 'DELETE'])
 def handle_project(id):
     conn = get_db_connection()
@@ -184,6 +189,7 @@ def handle_project(id):
         return '', 204
 
 # ===== PAYMENTS =====
+@app.route('/payments', methods=['GET', 'POST'])
 @app.route('/api/payments', methods=['GET', 'POST'])
 def handle_payments():
     conn = get_db_connection()
@@ -208,6 +214,7 @@ def handle_payments():
         conn.close()
         return jsonify(new_payment), 201
 
+@app.route('/payments/<id>', methods=['PUT', 'DELETE'])
 @app.route('/api/payments/<id>', methods=['PUT', 'DELETE'])
 def handle_payment(id):
     conn = get_db_connection()

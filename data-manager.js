@@ -19,7 +19,14 @@ class DataManager {
 
     try {
       // Check if API is available
-      const healthCheck = await fetch(`${this.apiBase}/health`).catch(() => ({ ok: false }));
+      console.log('Checking API health at:', `${this.apiBase}/health`);
+      const healthCheck = await fetch(`${this.apiBase}/health`).catch(err => {
+        console.error('Fetch error:', err);
+        return { ok: false, statusText: err.message };
+      });
+
+      console.log('Health check status:', healthCheck.status, healthCheck.ok);
+
       if (healthCheck.ok) {
         this.useApi = true;
         await this.reloadAllData();
