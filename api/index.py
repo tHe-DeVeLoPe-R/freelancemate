@@ -10,8 +10,15 @@ CORS(app)
 
 # Database connection helper
 def get_db_connection():
-    # Vercel provides POSTGRES_URL environment variable
-    conn = psycopg2.connect(os.environ.get('POSTGRES_URL'), cursor_factory=RealDictCursor)
+    url = os.environ.get('POSTGRES_URL') or os.environ.get('DATABASE_URL')
+    if not url:
+        raise Exception("Missing database connection URL (POSTGRES_URL or DATABASE_URL)")
+    
+    # Psycopg2 requires postgresql:// instead of postgres://
+    if url.startswith('postgres://'):
+        url = url.replace('postgres://', 'postgresql://', 1)
+        
+    conn = psycopg2.connect(url, cursor_factory=RealDictCursor)
     return conn
 
 # Initialize database tables
@@ -63,13 +70,13 @@ def init_db():
     cur.close()
     conn.close()
 
-# Initialize DB on first request or startup
-@app.before_first_request
-def startup():
+# Initialize DB when the app starts
+with app.app_context():
     try:
         init_db()
+        print("Database initialized successfully")
     except Exception as e:
-        print(f"Error initializing DB: {e}")
+        print(f"Database initialization deferred: {e}")
 
 @app.route('/api/health', methods=['GET'])
 def health():
