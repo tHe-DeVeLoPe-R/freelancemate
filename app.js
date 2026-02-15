@@ -9,8 +9,8 @@ class App {
 
   async init() {
     // Load data from localStorage first
-    dataManager.loadFromLocalStorage();
-    analytics = new Analytics(dataManager);
+    window.dataManager.loadFromLocalStorage();
+    window.analytics = new Analytics(window.dataManager);
 
     // Render initial view
     this.render();
@@ -27,7 +27,11 @@ class App {
   }
 
   updateDashboard() {
-    const stats = analytics.getDashboardStats();
+    if (!window.analytics) {
+      console.warn('Analytics not initialized yet');
+      return;
+    }
+    const stats = window.analytics.getDashboardStats();
 
     document.getElementById('stat-pending-work').textContent = stats.pendingWork;
     document.getElementById('stat-pending-7days').textContent = formatCurrency(stats.pendingNextWeek);
@@ -38,7 +42,8 @@ class App {
   }
 
   renderCharts() {
-    const trend = analytics.getMonthlyRevenueTrend();
+    if (!window.analytics) return;
+    const trend = window.analytics.getMonthlyRevenueTrend();
     const chartContainer = document.getElementById('revenue-chart');
     if (!chartContainer) return;
 
@@ -95,7 +100,7 @@ class App {
     emptyState.classList.add('hidden');
 
     tbody.innerHTML = clients.map(client => {
-      const stats = analytics.getClientStats(client.id);
+      const stats = window.analytics.getClientStats(client.id);
       return `
         <tr>
           <td><strong>${escapeHtml(client.name)}</strong></td>
@@ -108,10 +113,10 @@ class App {
           </td>
           <td>
             <div class="action-buttons">
-              <button class="btn btn-sm btn-secondary" onclick="app.editClient('${client.id}')">
+              <button class="btn btn-sm btn-secondary" onclick="window.app.editClient('${client.id}')">
                 ✏️ Edit
               </button>
-              <button class="btn btn-sm btn-danger" onclick="app.deleteClient('${client.id}')">
+              <button class="btn btn-sm btn-danger" onclick="window.app.deleteClient('${client.id}')">
                 🗑️ Delete
               </button>
             </div>
@@ -168,13 +173,22 @@ class App {
   }
 
   async deleteClient(clientId) {
-    const client = dataManager.getClient(clientId);
-    if (!client) return;
+    console.log('App.deleteClient called with id:', clientId);
+    const client = window.dataManager.getClient(clientId);
+    if (!client) {
+      console.warn('Client not found for deletion:', clientId);
+      return;
+    }
 
     if (window.confirm(`Are you sure you want to delete ${client.name}? This will also delete all associated projects and payments.`)) {
-      await dataManager.deleteClient(clientId);
-      showToast('Client deleted successfully!', 'success');
-      this.render();
+      try {
+        await window.dataManager.deleteClient(clientId);
+        showToast('Client deleted successfully!', 'success');
+        this.render();
+      } catch (error) {
+        console.error('Error during client deletion:', error);
+        showToast('Failed to delete client', 'error');
+      }
     }
   }
 
@@ -215,10 +229,10 @@ class App {
           <td>${statusBadge}</td>
           <td>
             <div class="action-buttons">
-              <button class="btn btn-sm btn-secondary" onclick="app.editProject('${project.id}')">
+              <button class="btn btn-sm btn-secondary" onclick="window.app.editProject('${project.id}')">
                 ✏️ Edit
               </button>
-              <button class="btn btn-sm btn-danger" onclick="app.deleteProject('${project.id}')">
+              <button class="btn btn-sm btn-danger" onclick="window.app.deleteProject('${project.id}')">
                 🗑️ Delete
               </button>
             </div>
@@ -285,13 +299,22 @@ class App {
   }
 
   async deleteProject(projectId) {
-    const project = dataManager.getProject(projectId);
-    if (!project) return;
+    console.log('App.deleteProject called with id:', projectId);
+    const project = window.dataManager.getProject(projectId);
+    if (!project) {
+      console.warn('Project not found for deletion:', projectId);
+      return;
+    }
 
     if (window.confirm(`Are you sure you want to delete "${project.title}"? This will also delete associated payments.`)) {
-      await dataManager.deleteProject(projectId);
-      showToast('Project deleted successfully!', 'success');
-      this.render();
+      try {
+        await window.dataManager.deleteProject(projectId);
+        showToast('Project deleted successfully!', 'success');
+        this.render();
+      } catch (error) {
+        console.error('Error during project deletion:', error);
+        showToast('Failed to delete project', 'error');
+      }
     }
   }
 
@@ -344,7 +367,7 @@ class App {
           <td>
             <div class="action-buttons">
               ${payment.status === 'pending' ? `
-                <button class="btn btn-sm btn-success" onclick="app.markPaymentReceived('${payment.id}')">
+                <button class="btn btn-sm btn-success" onclick="window.app.markPaymentReceived('${payment.id}')">
                   ✅ Mark Received
                 </button>
               ` : `
@@ -366,7 +389,8 @@ class App {
   // ===== REMINDERS =====
 
   renderReminders() {
-    const reminders = analytics.getPaymentsNeedingReminders();
+    if (!window.analytics) return;
+    const reminders = window.analytics.getPaymentsNeedingReminders();
     const tbody = document.getElementById('reminders-table-body');
     const emptyState = document.getElementById('reminders-empty');
     const tableContainer = tbody.closest('.table-container');
@@ -400,11 +424,11 @@ class App {
           </td>
           <td>
             <div class="action-buttons">
-              <button class="btn btn-sm btn-success" onclick="app.markPaymentReceived('${reminder.id}')">
+              <button class="btn btn-sm btn-success" onclick="window.app.markPaymentReceived('${reminder.id}')">
                 ✅ Mark Received
               </button>
               ${reminder.client && reminder.client.email ? `
-                <button class="btn btn-sm btn-secondary" onclick="app.copyReminderEmail('${reminder.client.email}', '${reminder.project ? reminder.project.title : ''}', ${reminder.amount})">
+                <button class="btn btn-sm btn-secondary" onclick="window.app.copyReminderEmail('${reminder.client.email}', '${reminder.project ? reminder.project.title : ''}', ${reminder.amount})">
                   📧 Copy Email
                 </button>
               ` : ''}
@@ -473,8 +497,8 @@ class App {
 
 // Initialize app when DOM is ready
 window.app = new App();
-const app = window.app;
 document.addEventListener('DOMContentLoaded', async () => {
-  await dataManager.init();
-  await app.init();
+  console.log('DOM ready, initializing dataManager and app...');
+  await window.dataManager.init();
+  await window.app.init();
 });

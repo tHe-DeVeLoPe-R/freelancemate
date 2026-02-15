@@ -236,4 +236,4 @@ class Analytics {
 }
 
 // Create global instance
-let analytics;
+window.analytics = null;
