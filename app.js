@@ -8,14 +8,14 @@ class App {
   }
 
   async init() {
-    // Load data from localStorage first
-    window.dataManager.loadFromLocalStorage();
+    // Initializing data manager (now handles MySQL API)
+    await window.dataManager.init();
     window.analytics = new Analytics(window.dataManager);
 
     // Render initial view
     this.render();
 
-    console.log('App initialized successfully');
+    console.log('App initialized successfully with MySQL');
   }
 
   render() {

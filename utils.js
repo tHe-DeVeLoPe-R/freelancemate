@@ -167,37 +167,24 @@ function debounce(func, wait) {
 }
 
 // Show toast notification
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.textContent = message;
-    toast.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: var(--bg-card);
-    color: var(--text-primary);
-    padding: 1rem 1.5rem;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-color);
-    box-shadow: var(--shadow-lg);
-    z-index: 10000;
-    animation: slideIn 0.3s ease;
-    backdrop-filter: blur(20px);
-  `;
+// Toast Notifications (Using SweetAlert2)
+function showToast(message, type = 'success') {
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer)
+            toast.addEventListener('mouseleave', Swal.resumeTimer)
+        }
+    });
 
-    if (type === 'success') {
-        toast.style.borderColor = 'var(--success-color)';
-    } else if (type === 'error') {
-        toast.style.borderColor = 'var(--danger-color)';
-    }
-
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    Toast.fire({
+        icon: type,
+        title: message
+    });
 }
 
 // Confirm dialog

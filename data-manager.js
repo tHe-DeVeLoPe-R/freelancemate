@@ -1,51 +1,37 @@
-// Data Manager - Hybrid Persistence (API with LocalStorage Fallback)
+// Data Manager - PHP/MySQL Backend
 class DataManager {
   constructor() {
     this.clients = [];
     this.projects = [];
     this.payments = [];
     this.initialized = false;
-    this.apiBase = '/api';
-    this.useApi = false; // Will be set to true if health check passes
+    this.apiBase = 'api.php';
   }
 
   // Initialize data
   async init() {
     const statusBadge = document.getElementById('api-status');
     if (statusBadge) {
-      statusBadge.textContent = '🔍 Checking Sync...';
+      statusBadge.textContent = '🔍 Connecting to Database...';
       statusBadge.className = 'badge badge-pending';
     }
 
     try {
-      // Check if API is available
-      console.log('Checking API health at:', `${this.apiBase}/health`);
-      const healthCheck = await fetch(`${this.apiBase}/health`).catch(err => {
-        console.error('Fetch error:', err);
-        return { ok: false, statusText: err.message };
-      });
-
-      console.log('Health check status:', healthCheck.status, healthCheck.ok);
-
-      if (healthCheck.ok) {
-        this.useApi = true;
-        await this.reloadAllData();
-        if (statusBadge) {
-          statusBadge.textContent = '✅ Cloud Sync On';
-          statusBadge.className = 'badge badge-success';
-        }
-      } else {
-        throw new Error('API unreachable');
+      await this.reloadAllData();
+      if (statusBadge) {
+        statusBadge.textContent = '✅ Connected (MySQL)';
+        statusBadge.className = 'badge badge-success';
       }
     } catch (error) {
-      console.log('Using Local Storage (Cloud Sync Offline)');
-      this.useApi = false;
-      this.loadFromLocalStorage();
+      console.error('Database connection failed:', error);
       if (statusBadge) {
-        statusBadge.textContent = '🏠 Local Mode';
-        statusBadge.className = 'badge badge-secondary';
-        statusBadge.title = 'Data is saved on this device only. Set up Vercel Postgres to enable cloud sync.';
+        statusBadge.textContent = '❌ Connection Failed';
+        statusBadge.className = 'badge badge-danger';
       }
+      // Fallback to empty if DB fails
+      this.clients = [];
+      this.projects = [];
+      this.payments = [];
     }
 
     this.initialized = true;
@@ -53,18 +39,22 @@ class DataManager {
 
   async reloadAllData() {
     try {
-      const [clients, projects, payments] = await Promise.all([
-        fetch(`${this.apiBase}/clients`).then(res => res.json()),
-        fetch(`${this.apiBase}/projects`).then(res => res.json()),
-        fetch(`${this.apiBase}/payments`).then(res => res.json())
-      ]);
+      const response = await fetch(`${this.apiBase}?action=get_all`);
+      if (!response.ok) throw new Error('Failed to fetch data');
+      const data = await response.json();
 
-      this.clients = clients;
-      this.projects = projects;
-      this.payments = payments;
-      this.syncLocalStorage();
+      this.clients = data.clients || [];
+      this.projects = data.projects || [];
+      this.payments = data.payments || [];
+
+      // Update IDs to match JS-style if necessary (PHP might return numeric strings)
+      this.clients.forEach(c => c.id = String(c.id));
+      this.projects.forEach(p => p.id = String(p.id));
+      this.payments.forEach(p => p.id = String(p.id));
+
     } catch (e) {
-      console.warn('Reloading failed, keeping local data', e);
+      console.error('Data reload failed', e);
+      throw e;
     }
   }
 
@@ -77,65 +67,61 @@ class DataManager {
       createdAt: new Date().toISOString()
     };
 
-    // Always update local first for responsiveness
-    this.clients.unshift(client);
-    this.syncLocalStorage();
+    try {
+      const response = await fetch(`${this.apiBase}?action=save_client`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(client)
+      });
+      if (!response.ok) throw new Error('Save failed');
 
-    if (this.useApi) {
-      try {
-        await fetch(`${this.apiBase}/clients`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(client)
-        });
-      } catch (e) {
-        console.error('Failed to sync to cloud', e);
-      }
+      this.clients.unshift(client);
+      return client;
+    } catch (e) {
+      console.error('Failed to save client', e);
+      throw e;
     }
-
-    return client;
   }
 
   async updateClient(id, clientData) {
-    const index = this.clients.findIndex(c => c.id === id);
-    if (index !== -1) {
-      this.clients[index] = { ...this.clients[index], ...clientData };
-      this.syncLocalStorage();
-    }
+    const existing = this.getClient(id);
+    const updatedClient = { ...existing, ...clientData };
 
-    if (this.useApi) {
-      try {
-        await fetch(`${this.apiBase}/clients/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(clientData)
-        });
-      } catch (e) {
-        console.error('Failed to sync to cloud', e);
-      }
+    try {
+      const response = await fetch(`${this.apiBase}?action=save_client`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedClient)
+      });
+      if (!response.ok) throw new Error('Update failed');
+
+      const index = this.clients.findIndex(c => c.id === id);
+      if (index !== -1) this.clients[index] = updatedClient;
+
+      return updatedClient;
+    } catch (e) {
+      console.error('Failed to update client', e);
+      throw e;
     }
-    return this.getClient(id);
   }
 
   async deleteClient(id) {
-    // Update local state immediately
-    this.clients = this.clients.filter(c => c.id !== id);
-    this.projects = this.projects.filter(p => p.clientId !== id);
-    const remainingProjectIds = this.projects.map(p => p.id);
-    this.payments = this.payments.filter(p => remainingProjectIds.includes(p.projectId));
-    this.syncLocalStorage();
+    try {
+      const response = await fetch(`${this.apiBase}?action=delete_client&id=${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Delete failed');
 
-    if (this.useApi) {
-      try {
-        await fetch(`${this.apiBase}/clients/${id}`, { method: 'DELETE' });
-      } catch (e) {
-        console.error('Failed to sync deletion to cloud', e);
-      }
+      this.clients = this.clients.filter(c => c.id !== id);
+      this.projects = this.projects.filter(p => p.clientId !== id);
+      const remainingProjectIds = this.projects.map(p => p.id);
+      this.payments = this.payments.filter(p => remainingProjectIds.includes(p.projectId));
+    } catch (e) {
+      console.error('Failed to delete client', e);
+      throw e;
     }
   }
 
   getClient(id) {
-    return this.clients.find(c => c.id === id);
+    return this.clients.find(c => c.id === String(id));
   }
 
   getAllClients() {
@@ -151,72 +137,70 @@ class DataManager {
       createdAt: new Date().toISOString()
     };
 
-    this.projects.unshift(project);
-
-    // Auto-create payment
-    if (project.amount > 0) {
-      await this.addPayment({
-        projectId: project.id,
-        amount: project.amount,
-        status: 'pending',
-        dueDate: this.calculatePaymentDueDate(project.deadline)
+    try {
+      const response = await fetch(`${this.apiBase}?action=save_project`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(project)
       });
-    }
+      if (!response.ok) throw new Error('Project save failed');
 
-    this.syncLocalStorage();
+      this.projects.unshift(project);
 
-    if (this.useApi) {
-      try {
-        await fetch(`${this.apiBase}/projects`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(project)
+      // Auto-create payment
+      if (project.amount > 0) {
+        await this.addPayment({
+          projectId: project.id,
+          amount: project.amount,
+          status: 'pending',
+          dueDate: this.calculatePaymentDueDate(project.deadline)
         });
-      } catch (e) {
-        console.error('Failed to sync project to cloud', e);
       }
-    }
 
-    return project;
+      return project;
+    } catch (e) {
+      console.error('Failed to add project', e);
+      throw e;
+    }
   }
 
   async updateProject(id, projectData) {
-    const index = this.projects.findIndex(p => p.id === id);
-    if (index !== -1) {
-      this.projects[index] = { ...this.projects[index], ...projectData };
-      this.syncLocalStorage();
-    }
+    const existing = this.getProject(id);
+    const updatedProject = { ...existing, ...projectData };
 
-    if (this.useApi) {
-      try {
-        await fetch(`${this.apiBase}/projects/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(projectData)
-        });
-      } catch (e) {
-        console.error('Failed to sync project to cloud', e);
-      }
+    try {
+      const response = await fetch(`${this.apiBase}?action=save_project`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedProject)
+      });
+      if (!response.ok) throw new Error('Project update failed');
+
+      const index = this.projects.findIndex(p => p.id === id);
+      if (index !== -1) this.projects[index] = updatedProject;
+
+      return updatedProject;
+    } catch (e) {
+      console.error('Failed to update project', e);
+      throw e;
     }
-    return this.getProject(id);
   }
 
   async deleteProject(id) {
-    this.projects = this.projects.filter(p => p.id !== id);
-    this.payments = this.payments.filter(p => p.projectId !== id);
-    this.syncLocalStorage();
+    try {
+      const response = await fetch(`${this.apiBase}?action=delete_project&id=${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Project delete failed');
 
-    if (this.useApi) {
-      try {
-        await fetch(`${this.apiBase}/projects/${id}`, { method: 'DELETE' });
-      } catch (e) {
-        console.error('Failed to sync project deletion to cloud', e);
-      }
+      this.projects = this.projects.filter(p => p.id !== id);
+      this.payments = this.payments.filter(p => p.projectId !== id);
+    } catch (e) {
+      console.error('Failed to delete project', e);
+      throw e;
     }
   }
 
   getProject(id) {
-    return this.projects.find(p => p.id === id);
+    return this.projects.find(p => p.id === String(id));
   }
 
   getAllProjects() {
@@ -224,7 +208,7 @@ class DataManager {
   }
 
   getProjectsByClient(clientId) {
-    return this.projects.filter(p => p.clientId === clientId);
+    return this.projects.filter(p => p.clientId === String(clientId));
   }
 
   // ===== PAYMENT OPERATIONS =====
@@ -236,60 +220,46 @@ class DataManager {
       createdAt: new Date().toISOString()
     };
 
-    this.payments.unshift(payment);
-    this.syncLocalStorage();
+    try {
+      const response = await fetch(`${this.apiBase}?action=save_payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payment)
+      });
+      if (!response.ok) throw new Error('Payment save failed');
 
-    if (this.useApi) {
-      try {
-        await fetch(`${this.apiBase}/payments`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payment)
-        });
-      } catch (e) {
-        console.error('Failed to sync payment to cloud', e);
-      }
+      this.payments.unshift(payment);
+      return payment;
+    } catch (e) {
+      console.error('Failed to add payment', e);
+      throw e;
     }
-
-    return payment;
   }
 
   async updatePayment(id, paymentData) {
-    const index = this.payments.findIndex(p => p.id === id);
-    if (index !== -1) {
-      this.payments[index] = { ...this.payments[index], ...paymentData };
-      this.syncLocalStorage();
-    }
+    const existing = this.getPayment(id);
+    const updatedPayment = { ...existing, ...paymentData };
 
-    if (this.useApi) {
-      try {
-        await fetch(`${this.apiBase}/payments/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(paymentData)
-        });
-      } catch (e) {
-        console.error('Failed to sync payment to cloud', e);
-      }
-    }
-    return this.getPayment(id);
-  }
+    try {
+      const response = await fetch(`${this.apiBase}?action=save_payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedPayment)
+      });
+      if (!response.ok) throw new Error('Payment update failed');
 
-  async deletePayment(id) {
-    this.payments = this.payments.filter(p => p.id !== id);
-    this.syncLocalStorage();
+      const index = this.payments.findIndex(p => p.id === id);
+      if (index !== -1) this.payments[index] = updatedPayment;
 
-    if (this.useApi) {
-      try {
-        await fetch(`${this.apiBase}/payments/${id}`, { method: 'DELETE' });
-      } catch (e) {
-        console.error('Failed to sync payment deletion to cloud', e);
-      }
+      return updatedPayment;
+    } catch (e) {
+      console.error('Failed to update payment', e);
+      throw e;
     }
   }
 
   getPayment(id) {
-    return this.payments.find(p => p.id === id);
+    return this.payments.find(p => p.id === String(id));
   }
 
   getAllPayments() {
@@ -297,7 +267,7 @@ class DataManager {
   }
 
   getPaymentsByProject(projectId) {
-    return this.payments.filter(p => p.projectId === projectId);
+    return this.payments.filter(p => p.projectId === String(projectId));
   }
 
   // ===== RELATIONAL QUERIES =====
@@ -333,41 +303,18 @@ class DataManager {
     return deadline.toISOString();
   }
 
-  syncLocalStorage() {
-    try {
-      localStorage.setItem('clients', JSON.stringify(this.clients));
-      localStorage.setItem('projects', JSON.stringify(this.projects));
-      localStorage.setItem('payments', JSON.stringify(this.payments));
-    } catch (error) {
-      console.error('Error syncing to localStorage:', error);
-    }
-  }
-
-  loadFromLocalStorage() {
-    try {
-      const clients = localStorage.getItem('clients');
-      const projects = localStorage.getItem('projects');
-      const payments = localStorage.getItem('payments');
-      this.clients = clients ? JSON.parse(clients) : [];
-      this.projects = projects ? JSON.parse(projects) : [];
-      this.payments = payments ? JSON.parse(payments) : [];
-    } catch (e) {
-      console.error('Error loading from localStorage', e);
-    }
-  }
-
-  // Clear all data (Reset)
+  // Clear all data (Reset MySQL Database)
   async clearData() {
-    this.clients = [];
-    this.projects = [];
-    this.payments = [];
-    localStorage.removeItem('clients');
-    localStorage.removeItem('projects');
-    localStorage.removeItem('payments');
+    try {
+      const response = await fetch(`${this.apiBase}?action=reset_database`, { method: 'POST' });
+      if (!response.ok) throw new Error('DB Reset failed');
 
-    if (this.useApi) {
-      // For safety, we only clear local in this mode to avoid accidental mass deletion
-      showToast('Local data cleared. Cloud sync is still active.', 'info');
+      this.clients = [];
+      this.projects = [];
+      this.payments = [];
+    } catch (e) {
+      console.error('Failed to reset database', e);
+      throw e;
     }
   }
 }

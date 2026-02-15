@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- SweetAlert2 for professional alerts -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
 <body>
@@ -21,12 +23,12 @@
           <h1>Freelancer Manager</h1>
         </div>
         <div class="flex gap-1 items-center">
-          <div id="api-status" class="badge badge-pending">📡 Connecting...</div>
-          <button class="btn btn-secondary btn-sm" onclick="app.render()">
-            🔄 Refresh
+          <div id="api-status" class="badge badge-pending">📡 Connecting DB...</div>
+          <button class="btn btn-secondary btn-sm" onclick="app.init()">
+            🔄 Sync
           </button>
           <button class="btn btn-danger btn-sm" onclick="app.resetDatabase()">
-            ⚠️ Reset
+            ⚠️ Reset DB
           </button>
         </div>
       </div>
