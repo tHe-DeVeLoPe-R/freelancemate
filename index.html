@@ -20,20 +20,14 @@
           <div class="logo-icon">💼</div>
           <h1>Freelancer Manager</h1>
         </div>
-        <div class="flex gap-1">
-          <button id="connect-folder-btn" class="btn btn-primary btn-sm" onclick="dataManager.connectToFolder()">
-            📁 Connect Data Folder
-          </button>
-          <button class="btn btn-secondary btn-sm" onclick="app.exportData()">
-            📥 Export Data
-          </button>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('importFile').click()">
-            📤 Import Data
+        <div class="flex gap-1 items-center">
+          <div id="api-status" class="badge badge-pending">📡 Connecting...</div>
+          <button class="btn btn-secondary btn-sm" onclick="app.render()">
+            🔄 Refresh
           </button>
           <button class="btn btn-danger btn-sm" onclick="app.resetDatabase()">
-            ⚠️ Reset Database
+            ⚠️ Reset
           </button>
-          <input type="file" id="importFile" accept=".json" style="display: none;" onchange="app.importData(event)">
         </div>
       </div>
     </header>

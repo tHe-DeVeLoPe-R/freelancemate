@@ -1,169 +1,55 @@
-// Data Manager - JSON-based database operations
+// Data Manager - API-based database operations
 class DataManager {
   constructor() {
     this.clients = [];
     this.projects = [];
     this.payments = [];
     this.initialized = false;
-    this.dirHandle = null;
+    this.apiBase = '/api'; // Vercel API path
   }
 
   // Initialize data
   async init() {
+    const statusBadge = document.getElementById('api-status');
     try {
-      // First try to load from localStorage for quick start
-      const hasLocalStorage = this.loadFromLocalStorage();
-      if (hasLocalStorage) {
-        console.log('Data loaded from localStorage');
+      if (statusBadge) {
+        statusBadge.textContent = '📡 Connecting...';
+        statusBadge.className = 'badge badge-pending';
       }
+
+      await this.reloadAllData();
       this.initialized = true;
+      console.log('Data loaded from API');
+
+      if (statusBadge) {
+        statusBadge.textContent = '✅ Connected';
+        statusBadge.className = 'badge badge-success';
+      }
     } catch (error) {
-      console.error('Error initializing data:', error);
+      console.error('Error initializing data from API:', error);
+      if (statusBadge) {
+        statusBadge.textContent = '❌ Offline';
+        statusBadge.className = 'badge badge-danger';
+      }
+      // Fallback to localStorage if API fails
+      this.loadFromLocalStorage();
       this.initialized = true;
     }
   }
 
-  // Connect to the local data directory
-  async connectToFolder() {
-    try {
-      this.dirHandle = await window.showDirectoryPicker({
-        mode: 'readwrite'
-      });
+  async reloadAllData() {
+    const [clients, projects, payments] = await Promise.all([
+      fetch(`${this.apiBase}/clients`).then(res => res.json()),
+      fetch(`${this.apiBase}/projects`).then(res => res.json()),
+      fetch(`${this.apiBase}/payments`).then(res => res.json())
+    ]);
 
-      const btn = document.getElementById('connect-folder-btn');
-      if (btn) {
-        btn.innerHTML = '✅ Folder Connected';
-        btn.classList.replace('btn-primary', 'btn-success');
-      }
+    this.clients = clients;
+    this.projects = projects;
+    this.payments = payments;
 
-      showToast('Successfully connected to data folder!', 'success');
-
-      // Load data from the folder
-      await this.loadFromFolder();
-
-      // Trigger app re-render
-      if (typeof app !== 'undefined' && app.render) {
-        app.render();
-      }
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        console.error('Error connecting to folder:', error);
-        showToast('Failed to connect to folder', 'error');
-      }
-    }
-  }
-
-  // Load data from JSON files in the connected folder
-  async loadFromFolder() {
-    if (!this.dirHandle) return;
-
-    try {
-      const clientsData = await this.readJsonFile('clients.json');
-      const projectsData = await this.readJsonFile('projects.json');
-      const paymentsData = await this.readJsonFile('payments.json');
-
-      this.clients = clientsData || [];
-      this.projects = projectsData || [];
-      this.payments = paymentsData || [];
-
-      // Sync to localStorage as well
-      this.syncLocalStorage();
-      console.log('Data loaded from JSON files in connected folder');
-    } catch (error) {
-      console.error('Error loading from folder:', error);
-      showToast('Error reading JSON files', 'error');
-    }
-  }
-
-  // Helper to read a JSON file from the handle
-  async readJsonFile(filename) {
-    try {
-      const fileHandle = await this.dirHandle.getFileHandle(filename, { create: true });
-      const file = await fileHandle.getFile();
-      const text = await file.text();
-      return text ? JSON.parse(text) : [];
-    } catch (error) {
-      console.error(`Error reading ${filename}:`, error);
-      return [];
-    }
-  }
-
-  // Save data to disk (and localStorage)
-  async saveData() {
-    // Always save to localStorage immediately
+    // Cache to localStorage for offline/speed
     this.syncLocalStorage();
-
-    // If folder is connected, save to JSON files too
-    if (this.dirHandle) {
-      try {
-        await this.writeJsonFile('clients.json', this.clients);
-        await this.writeJsonFile('projects.json', this.projects);
-        await this.writeJsonFile('payments.json', this.payments);
-        console.log('Data saved to JSON files on disk');
-      } catch (error) {
-        console.error('Error saving to JSON files:', error);
-        showToast('Error saving to local files', 'error');
-      }
-    } else {
-      console.log('Data saved to localStorage (Folder not connected)');
-    }
-  }
-
-  // Helper to write a JSON file to the handle
-  async writeJsonFile(filename, data) {
-    try {
-      const fileHandle = await this.dirHandle.getFileHandle(filename, { create: true });
-      const writable = await fileHandle.createWritable();
-      await writable.write(JSON.stringify(data, null, 2));
-      await writable.close();
-    } catch (error) {
-      console.error(`Error writing ${filename}:`, error);
-      throw error;
-    }
-  }
-
-  // Sync current memory state to localStorage
-  syncLocalStorage() {
-    try {
-      localStorage.setItem('clients', JSON.stringify(this.clients));
-      localStorage.setItem('projects', JSON.stringify(this.projects));
-      localStorage.setItem('payments', JSON.stringify(this.payments));
-    } catch (error) {
-      console.error('Error syncing to localStorage:', error);
-    }
-  }
-
-  // Clear all data (Reset)
-  async clearData() {
-    this.clients = [];
-    this.projects = [];
-    this.payments = [];
-    localStorage.removeItem('clients');
-    localStorage.removeItem('projects');
-    localStorage.removeItem('payments');
-    await this.saveData();
-  }
-
-  // Load data from localStorage
-  loadFromLocalStorage() {
-    try {
-      const clients = localStorage.getItem('clients');
-      const projects = localStorage.getItem('projects');
-      const payments = localStorage.getItem('payments');
-
-      if (!clients && !projects && !payments) return false;
-
-      this.clients = clients ? JSON.parse(clients) : [];
-      this.projects = projects ? JSON.parse(projects) : [];
-      this.payments = payments ? JSON.parse(payments) : [];
-      return true;
-    } catch (error) {
-      console.error('Error loading from localStorage:', error);
-      this.clients = [];
-      this.projects = [];
-      this.payments = [];
-      return false;
-    }
   }
 
   // ===== CLIENT OPERATIONS =====
@@ -171,41 +57,56 @@ class DataManager {
   async addClient(clientData) {
     const client = {
       id: this.generateId(),
-      name: clientData.name,
-      email: clientData.email,
-      phone: clientData.phone,
-      company: clientData.company || '',
-      createdAt: new Date().toISOString()
+      ...clientData
     };
-    this.clients.push(client);
-    await this.saveData();
-    return client;
+
+    const response = await fetch(`${this.apiBase}/clients`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(client)
+    });
+
+    if (!response.ok) throw new Error('Failed to add client');
+
+    const newClient = await response.json();
+    this.clients.unshift(newClient);
+    this.syncLocalStorage();
+    return newClient;
   }
 
   async updateClient(id, clientData) {
+    const response = await fetch(`${this.apiBase}/clients/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(clientData)
+    });
+
+    if (!response.ok) throw new Error('Failed to update client');
+
+    const updatedClient = await response.json();
     const index = this.clients.findIndex(c => c.id === id);
     if (index !== -1) {
-      this.clients[index] = {
-        ...this.clients[index],
-        ...clientData,
-        id: this.clients[index].id,
-        createdAt: this.clients[index].createdAt
-      };
-      await this.saveData();
-      return this.clients[index];
+      this.clients[index] = updatedClient;
     }
-    return null;
+    this.syncLocalStorage();
+    return updatedClient;
   }
 
   async deleteClient(id) {
-    // Also delete associated projects and payments
-    const projectIds = this.projects.filter(p => p.clientId === id).map(p => p.id);
-    for (const projectId of projectIds) {
-      await this.deleteProject(projectId);
-    }
+    const response = await fetch(`${this.apiBase}/clients/${id}`, {
+      method: 'DELETE'
+    });
+
+    if (!response.ok) throw new Error('Failed to delete client');
 
     this.clients = this.clients.filter(c => c.id !== id);
-    await this.saveData();
+    // Associated projects and payments are handled by cascade delete in DB
+    // But we need to update our local state
+    this.projects = this.projects.filter(p => p.clientId !== id);
+    const remainingProjectIds = this.projects.map(p => p.id);
+    this.payments = this.payments.filter(p => remainingProjectIds.includes(p.projectId));
+
+    this.syncLocalStorage();
   }
 
   getClient(id) {
@@ -221,58 +122,63 @@ class DataManager {
   async addProject(projectData) {
     const project = {
       id: this.generateId(),
-      clientId: projectData.clientId,
-      title: projectData.title,
-      description: projectData.description || '',
-      deadline: projectData.deadline,
-      status: projectData.status || 'pending',
-      deliveredAt: null,
-      amount: parseFloat(projectData.amount) || 0,
-      createdAt: new Date().toISOString()
+      ...projectData
     };
-    this.projects.push(project);
 
-    // Auto-create payment record
-    if (project.amount > 0) {
+    const response = await fetch(`${this.apiBase}/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(project)
+    });
+
+    if (!response.ok) throw new Error('Failed to add project');
+
+    const newProject = await response.json();
+    this.projects.unshift(newProject);
+
+    // The backend doesn't auto-create payments in this version to keep logic simple,
+    // or we can handle it here if we want. Let's handle it here for consistency with original app.
+    if (newProject.amount > 0) {
       await this.addPayment({
-        projectId: project.id,
-        amount: project.amount,
+        projectId: newProject.id,
+        amount: newProject.amount,
         status: 'pending',
-        dueDate: this.calculatePaymentDueDate(project.deadline)
+        dueDate: this.calculatePaymentDueDate(newProject.deadline)
       });
     }
 
-    await this.saveData();
-    return project;
+    this.syncLocalStorage();
+    return newProject;
   }
 
   async updateProject(id, projectData) {
+    const response = await fetch(`${this.apiBase}/projects/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(projectData)
+    });
+
+    if (!response.ok) throw new Error('Failed to update project');
+
+    const updatedProject = await response.json();
     const index = this.projects.findIndex(p => p.id === id);
     if (index !== -1) {
-      const oldProject = this.projects[index];
-      this.projects[index] = {
-        ...oldProject,
-        ...projectData,
-        id: oldProject.id,
-        createdAt: oldProject.createdAt
-      };
-
-      // Update deliveredAt if status changed to delivered
-      if (projectData.status === 'delivered' && oldProject.status !== 'delivered') {
-        this.projects[index].deliveredAt = new Date().toISOString();
-      }
-
-      await this.saveData();
-      return this.projects[index];
+      this.projects[index] = updatedProject;
     }
-    return null;
+    this.syncLocalStorage();
+    return updatedProject;
   }
 
   async deleteProject(id) {
-    // Also delete associated payments
-    this.payments = this.payments.filter(p => p.projectId !== id);
+    const response = await fetch(`${this.apiBase}/projects/${id}`, {
+      method: 'DELETE'
+    });
+
+    if (!response.ok) throw new Error('Failed to delete project');
+
     this.projects = this.projects.filter(p => p.id !== id);
-    await this.saveData();
+    this.payments = this.payments.filter(p => p.projectId !== id);
+    this.syncLocalStorage();
   }
 
   getProject(id) {
@@ -292,43 +198,50 @@ class DataManager {
   async addPayment(paymentData) {
     const payment = {
       id: this.generateId(),
-      projectId: paymentData.projectId,
-      amount: parseFloat(paymentData.amount),
-      status: paymentData.status || 'pending',
-      dueDate: paymentData.dueDate,
-      receivedAt: null,
-      createdAt: new Date().toISOString()
+      ...paymentData
     };
-    this.payments.push(payment);
-    await this.saveData();
-    return payment;
+
+    const response = await fetch(`${this.apiBase}/payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payment)
+    });
+
+    if (!response.ok) throw new Error('Failed to add payment');
+
+    const newPayment = await response.json();
+    this.payments.unshift(newPayment);
+    this.syncLocalStorage();
+    return newPayment;
   }
 
   async updatePayment(id, paymentData) {
+    const response = await fetch(`${this.apiBase}/payments/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(paymentData)
+    });
+
+    if (!response.ok) throw new Error('Failed to update payment');
+
+    const updatedPayment = await response.json();
     const index = this.payments.findIndex(p => p.id === id);
     if (index !== -1) {
-      const oldPayment = this.payments[index];
-      this.payments[index] = {
-        ...oldPayment,
-        ...paymentData,
-        id: oldPayment.id,
-        createdAt: oldPayment.createdAt
-      };
-
-      // Update receivedAt if status changed to received
-      if (paymentData.status === 'received' && oldPayment.status !== 'received') {
-        this.payments[index].receivedAt = new Date().toISOString();
-      }
-
-      await this.saveData();
-      return this.payments[index];
+      this.payments[index] = updatedPayment;
     }
-    return null;
+    this.syncLocalStorage();
+    return updatedPayment;
   }
 
   async deletePayment(id) {
+    const response = await fetch(`${this.apiBase}/payments/${id}`, {
+      method: 'DELETE'
+    });
+
+    if (!response.ok) throw new Error('Failed to delete payment');
+
     this.payments = this.payments.filter(p => p.id !== id);
-    await this.saveData();
+    this.syncLocalStorage();
   }
 
   getPayment(id) {
@@ -364,22 +277,6 @@ class DataManager {
     });
   }
 
-  getClientWithProjectsAndPayments(clientId) {
-    const client = this.getClient(clientId);
-    if (!client) return null;
-
-    const projects = this.getProjectsByClient(clientId);
-    const projectsWithPayments = projects.map(project => ({
-      ...project,
-      payments: this.getPaymentsByProject(project.id)
-    }));
-
-    return {
-      ...client,
-      projects: projectsWithPayments
-    };
-  }
-
   // ===== UTILITY FUNCTIONS =====
 
   generateId() {
@@ -387,45 +284,36 @@ class DataManager {
   }
 
   calculatePaymentDueDate(deliveryDeadline) {
-    // Add 7 days to delivery deadline for payment due date
+    if (!deliveryDeadline) return new Date().toISOString();
     const deadline = new Date(deliveryDeadline);
     deadline.setDate(deadline.getDate() + 7);
     return deadline.toISOString();
   }
 
-  // Export data as JSON file
-  exportData() {
-    const data = {
-      clients: this.clients,
-      projects: this.projects,
-      payments: this.payments,
-      exportedAt: new Date().toISOString()
-    };
-
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `freelancer-data-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  syncLocalStorage() {
+    try {
+      localStorage.setItem('clients', JSON.stringify(this.clients));
+      localStorage.setItem('projects', JSON.stringify(this.projects));
+      localStorage.setItem('payments', JSON.stringify(this.payments));
+    } catch (error) {
+      console.error('Error syncing to localStorage:', error);
+    }
   }
 
-  // Import data from JSON file
-  importData(jsonData) {
+  loadFromLocalStorage() {
     try {
-      const data = JSON.parse(jsonData);
-      this.clients = data.clients || [];
-      this.projects = data.projects || [];
-      this.payments = data.payments || [];
-      this.saveData();
-      return true;
-    } catch (error) {
-      console.error('Error importing data:', error);
-      return false;
+      const clients = localStorage.getItem('clients');
+      const projects = localStorage.getItem('projects');
+      const payments = localStorage.getItem('payments');
+      if (clients) this.clients = JSON.parse(clients);
+      if (projects) this.projects = JSON.parse(projects);
+      if (payments) this.payments = JSON.parse(payments);
+    } catch (e) {
+      console.error('Error loading from localStorage', e);
     }
   }
 }
 
-// Create global instance
-const dataManager = new DataManager();
+// Create global instance and attach to window to fix scoping issues
+window.dataManager = new DataManager();
+const dataManager = window.dataManager;

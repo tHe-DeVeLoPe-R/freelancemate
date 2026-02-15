@@ -472,7 +472,9 @@ class App {
 }
 
 // Initialize app when DOM is ready
-const app = new App();
-document.addEventListener('DOMContentLoaded', () => {
-  app.init();
+window.app = new App();
+const app = window.app;
+document.addEventListener('DOMContentLoaded', async () => {
+  await dataManager.init();
+  await app.init();
 });
