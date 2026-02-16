@@ -68,6 +68,11 @@ try {
             $data = json_decode(file_get_contents('php://input'), true);
             if (!$data) throw new Exception('Invalid data');
             
+            $receivedAt = $data['receivedAt'] ?? null;
+            if ($data['status'] === 'received' && !$receivedAt) {
+                $receivedAt = date('Y-m-d H:i:s');
+            }
+
             $stmt = $pdo->prepare("REPLACE INTO payments (id, projectId, amount, status, dueDate, receivedAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([
                 $data['id'],
@@ -75,7 +80,7 @@ try {
                 $data['amount'] ?? 0,
                 $data['status'] ?? 'pending',
                 $data['dueDate'] ?: null,
-                $data['receivedAt'] ?: null,
+                $receivedAt,
                 $data['createdAt'] ?? date('Y-m-d H:i:s')
             ]);
             echo json_encode(['success' => true]);

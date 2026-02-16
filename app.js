@@ -420,7 +420,10 @@ class App {
   }
 
   async markPaymentReceived(paymentId) {
-    await dataManager.updatePayment(paymentId, { status: 'received' });
+    await dataManager.updatePayment(paymentId, {
+      status: 'received',
+      receivedAt: new Date().toISOString()
+    });
     showToast('Payment marked as received!', 'success');
     this.render();
   }

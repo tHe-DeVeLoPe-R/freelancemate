@@ -238,6 +238,11 @@ class DataManager {
     const existing = this.getPayment(id);
     const updatedPayment = { ...existing, ...paymentData };
 
+    // Set receivedAt if marking as received and not already set
+    if (updatedPayment.status === 'received' && !updatedPayment.receivedAt) {
+      updatedPayment.receivedAt = new Date().toISOString();
+    }
+
     try {
       const response = await fetch(`${this.apiBase}?action=save_payment`, {
         method: 'POST',
