@@ -31,6 +31,7 @@ try {
 
         case 'delete_client':
             $id = $_GET['id'] ?? '';
+            if (!$id) throw new Exception('ID required');
             $stmt = $pdo->prepare("DELETE FROM clients WHERE id = ?");
             $stmt->execute([$id]);
             echo json_encode(['success' => true]);
@@ -57,6 +58,7 @@ try {
 
         case 'delete_project':
             $id = $_GET['id'] ?? '';
+            if (!$id) throw new Exception('ID required');
             $stmt = $pdo->prepare("DELETE FROM projects WHERE id = ?");
             $stmt->execute([$id]);
             echo json_encode(['success' => true]);

@@ -107,13 +107,12 @@ class DataManager {
 
   async deleteClient(id) {
     try {
-      const response = await fetch(`${this.apiBase}?action=delete_client&id=${id}`, { method: 'DELETE' });
+      // Use simple GET for delete action to ensure compatibility with all hosting environments
+      const response = await fetch(`${this.apiBase}?action=delete_client&id=${id}`);
       if (!response.ok) throw new Error('Delete failed');
 
-      this.clients = this.clients.filter(c => c.id !== id);
-      this.projects = this.projects.filter(p => p.clientId !== id);
-      const remainingProjectIds = this.projects.map(p => p.id);
-      this.payments = this.payments.filter(p => remainingProjectIds.includes(p.projectId));
+      // Refresh all data from database to ensure local state is perfectly synced
+      await this.reloadAllData();
     } catch (e) {
       console.error('Failed to delete client', e);
       throw e;
@@ -188,11 +187,10 @@ class DataManager {
 
   async deleteProject(id) {
     try {
-      const response = await fetch(`${this.apiBase}?action=delete_project&id=${id}`, { method: 'DELETE' });
+      const response = await fetch(`${this.apiBase}?action=delete_project&id=${id}`);
       if (!response.ok) throw new Error('Project delete failed');
 
-      this.projects = this.projects.filter(p => p.id !== id);
-      this.payments = this.payments.filter(p => p.projectId !== id);
+      await this.reloadAllData();
     } catch (e) {
       console.error('Failed to delete project', e);
       throw e;
@@ -304,14 +302,13 @@ class DataManager {
   }
 
   // Clear all data (Reset MySQL Database)
+  // Clear all data (Reset MySQL Database)
   async clearData() {
     try {
       const response = await fetch(`${this.apiBase}?action=reset_database`, { method: 'POST' });
       if (!response.ok) throw new Error('DB Reset failed');
 
-      this.clients = [];
-      this.projects = [];
-      this.payments = [];
+      await this.reloadAllData();
     } catch (e) {
       console.error('Failed to reset database', e);
       throw e;

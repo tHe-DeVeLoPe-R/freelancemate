@@ -173,22 +173,42 @@ class App {
   }
 
   async deleteClient(clientId) {
-    console.log('App.deleteClient called with id:', clientId);
     const client = window.dataManager.getClient(clientId);
-    if (!client) {
-      console.warn('Client not found for deletion:', clientId);
+    if (!client) return;
+
+    // Fallback to native confirm if Swal is not available
+    if (typeof Swal === 'undefined') {
+      if (window.confirm(`Are you sure you want to delete ${client.name}? This will also remove all their projects and payments.`)) {
+        this.executeDeleteClient(clientId);
+      }
       return;
     }
 
-    if (window.confirm(`Are you sure you want to delete ${client.name}? This will also delete all associated projects and payments.`)) {
-      try {
-        await window.dataManager.deleteClient(clientId);
-        showToast('Client deleted successfully!', 'success');
-        this.render();
-      } catch (error) {
-        console.error('Error during client deletion:', error);
-        showToast('Failed to delete client', 'error');
+    Swal.fire({
+      title: 'Are you sure?',
+      text: `You are about to delete ${client.name}. This will also remove all their projects and payments!`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, delete it!',
+      background: '#1e1e2e',
+      color: '#ffffff'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        this.executeDeleteClient(clientId);
       }
+    });
+  }
+
+  async executeDeleteClient(clientId) {
+    try {
+      await window.dataManager.deleteClient(clientId);
+      showToast('Client deleted successfully!', 'success');
+      this.render();
+    } catch (error) {
+      console.error('Error during client deletion:', error);
+      showToast('Failed to delete client', 'error');
     }
   }
 
@@ -299,22 +319,41 @@ class App {
   }
 
   async deleteProject(projectId) {
-    console.log('App.deleteProject called with id:', projectId);
     const project = window.dataManager.getProject(projectId);
-    if (!project) {
-      console.warn('Project not found for deletion:', projectId);
+    if (!project) return;
+
+    if (typeof Swal === 'undefined') {
+      if (window.confirm(`Are you sure you want to delete "${project.title}"?`)) {
+        this.executeDeleteProject(projectId);
+      }
       return;
     }
 
-    if (window.confirm(`Are you sure you want to delete "${project.title}"? This will also delete associated payments.`)) {
-      try {
-        await window.dataManager.deleteProject(projectId);
-        showToast('Project deleted successfully!', 'success');
-        this.render();
-      } catch (error) {
-        console.error('Error during project deletion:', error);
-        showToast('Failed to delete project', 'error');
+    Swal.fire({
+      title: 'Delete Project?',
+      text: `Are you sure you want to delete "${project.title}"?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, delete it!',
+      background: '#1e1e2e',
+      color: '#ffffff'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        this.executeDeleteProject(projectId);
       }
+    });
+  }
+
+  async executeDeleteProject(projectId) {
+    try {
+      await window.dataManager.deleteProject(projectId);
+      showToast('Project deleted successfully!', 'success');
+      this.render();
+    } catch (error) {
+      console.error('Error during project deletion:', error);
+      showToast('Failed to delete project', 'error');
     }
   }
 
@@ -487,11 +526,23 @@ class App {
   // ===== DATA RESET =====
 
   async resetDatabase() {
-    if (window.confirm('WARNING: This will permanently delete all data from your browser. Continue?')) {
-      await dataManager.clearData();
-      showToast('Database reset successfully!', 'success');
-      this.render();
-    }
+    Swal.fire({
+      title: 'Reset Database?',
+      text: "WARNING: This will permanently delete ALL data. This action cannot be undone!",
+      icon: 'error',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, reset everything!',
+      background: '#1e1e2e',
+      color: '#ffffff'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        await dataManager.clearData();
+        showToast('Database reset successfully!', 'success');
+        this.render();
+      }
+    });
   }
 }
 
