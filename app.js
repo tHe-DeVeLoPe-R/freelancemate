@@ -300,7 +300,7 @@ class App {
       title: document.getElementById('project-title').value,
       description: document.getElementById('project-description').value,
       deadline: document.getElementById('project-deadline').value,
-      amount: document.getElementById('project-amount').value,
+      amount: Number(document.getElementById('project-amount').value),
       status: document.getElementById('project-status').value
     };
 

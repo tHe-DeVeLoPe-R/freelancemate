@@ -49,8 +49,14 @@ class DataManager {
 
       // Update IDs to match JS-style if necessary (PHP might return numeric strings)
       this.clients.forEach(c => c.id = String(c.id));
-      this.projects.forEach(p => p.id = String(p.id));
-      this.payments.forEach(p => p.id = String(p.id));
+      this.projects.forEach(p => {
+        p.id = String(p.id);
+        p.amount = Number(p.amount);
+      });
+      this.payments.forEach(p => {
+        p.id = String(p.id);
+        p.amount = Number(p.amount);
+      });
 
     } catch (e) {
       console.error('Data reload failed', e);
